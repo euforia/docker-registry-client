@@ -24,6 +24,12 @@ func Log(format string, args ...interface{}) {
 	log.Printf(format, args...)
 }
 
+type Config struct {
+	Username    string
+	Password    string
+	PingOnStart bool
+}
+
 type Registry struct {
 	URL    string
 	Client *http.Client
@@ -38,24 +44,24 @@ type Registry struct {
  * This passes http.DefaultTransport to WrapTransport when creating the
  * http.Client.
  */
-func New(registryUrl, username, password string) (*Registry, error) {
+func New(registryURL string, conf *Config) (*Registry, error) {
 	transport := http.DefaultTransport
 
-	return newFromTransport(registryUrl, username, password, transport, Log)
+	return newFromTransport(registryURL, conf, transport, Log)
 }
 
 /*
  * Create a new Registry, as with New, using an http.Transport that disables
  * SSL certificate verification.
  */
-func NewInsecure(registryUrl, username, password string) (*Registry, error) {
+func NewInsecure(registryURL string, conf *Config) (*Registry, error) {
 	transport := &http.Transport{
 		TLSClientConfig: &tls.Config{
 			InsecureSkipVerify: true,
 		},
 	}
 
-	return newFromTransport(registryUrl, username, password, transport, Log)
+	return newFromTransport(registryURL, conf, transport, Log)
 }
 
 /*
@@ -82,9 +88,9 @@ func WrapTransport(transport http.RoundTripper, url, username, password string) 
 	return errorTransport
 }
 
-func newFromTransport(registryUrl, username, password string, transport http.RoundTripper, logf LogfCallback) (*Registry, error) {
-	url := strings.TrimSuffix(registryUrl, "/")
-	transport = WrapTransport(transport, url, username, password)
+func newFromTransport(registryURL string, conf *Config, transport http.RoundTripper, logf LogfCallback) (*Registry, error) {
+	url := strings.TrimSuffix(registryURL, "/")
+	transport = WrapTransport(transport, url, conf.Username, conf.Password)
 	registry := &Registry{
 		URL: url,
 		Client: &http.Client{
@@ -93,8 +99,10 @@ func newFromTransport(registryUrl, username, password string, transport http.Rou
 		Logf: logf,
 	}
 
-	if err := registry.Ping(); err != nil {
-		return nil, err
+	if conf.PingOnStart {
+		if err := registry.Ping(); err != nil {
+			return nil, err
+		}
 	}
 
 	return registry, nil
